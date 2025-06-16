@@ -51,7 +51,7 @@ func main() {
 	fmt.Println("Running application logic...")
 
 	// Simulate some work
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	// 4. Check for updates periodically (or on user command)
 	// In a real application, you might do this in a goroutine
