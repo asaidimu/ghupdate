@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/asaidimu/ghupdate/compare/v1.0.2...v1.0.3) (2025-06-16)
+
+
+### Bug Fixes
+
+* **example:** use build-injected version for example app ([26384c0](https://github.com/asaidimu/ghupdate/commit/26384c0838d1a0aff6580a076f66e856df7f3761))
+
 ## [1.0.2](https://github.com/asaidimu/ghupdate/compare/v1.0.1...v1.0.2) (2025-06-16)
 
 
