@@ -25,7 +25,7 @@ build:
 	@echo "Building $(APP_NAME) for linux/amd64, version $(VERSION)..."
 	GOOS=linux GOARCH=amd64 go build \
 		-ldflags "$(LDFLAGS)" \
-		-o $(OUTPUT_DIR)/$(APP_NAME)-linux-amd64 \
+		-o $(OUTPUT_DIR)/$(APP_NAME)-v$(VERSION)-linux-amd64 \
 		./example/main.go
 	@echo "Build complete: $(OUTPUT_DIR)/$(APP_NAME)-v$(VERSION)-linux-amd64"
 
