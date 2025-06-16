@@ -30,9 +30,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Install semantic-release and plugins
-        run: npm install
-
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
