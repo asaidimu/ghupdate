@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/asaidimu/ghupdate/compare/v1.0.1...v1.0.2) (2025-06-16)
+
+
+### Bug Fixes
+
+* **build:** Add version to built artifact filename ([1f2a545](https://github.com/asaidimu/ghupdate/commit/1f2a5458d107bdb8bd62d5e3f98cd1cc915a747f))
+
 ## [1.0.1](https://github.com/asaidimu/ghupdate/compare/v1.0.0...v1.0.1) (2025-06-16)
 
 
