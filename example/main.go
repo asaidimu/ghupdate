@@ -18,7 +18,6 @@ var (
 const (
 	githubOwner    = "asaidimu"
 	githubRepo     = "ghupdate"
-	currentVersion = "v1.0.0"
 	assetPattern   = "example-{version}-{os}-{arch}{ext}"
 	appName = "example"
 )
@@ -47,7 +46,7 @@ func main() {
 	}
 
 	// 3. Perform regular application logic
-	fmt.Printf("My Application - Version %s\n", currentVersion)
+	fmt.Printf("My Application - Version %s\n", Version)
 	fmt.Println("Running application logic...")
 
 	// Simulate some work
@@ -58,7 +57,7 @@ func main() {
 	// or trigger it via a UI button.
 	checkUpdates(dataDir)
 
-	fmt.Println("Application finished.")
+	fmt.Println("Updated application finished.")
 }
 
 // getAppDataDir returns a cross-platform path suitable for storing application-specific data.
