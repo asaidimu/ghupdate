@@ -36,14 +36,14 @@ This library is designed for resilience, ensuring that updates are applied smoot
 
 ## Features
 
-✨ **Seamless GitHub Releases Integration**: Automatically fetches the latest release information and assets from your public or private GitHub repository.
-⚡️ **Semantic Versioning (SemVer) Compliance**: Accurately compares `vX.Y.Z` versions to determine if an update is available, using `golang.org/x/mod/semver`.
-🚀 **Cross-Platform Support**: Works flawlessly on Windows, Linux, and macOS, handling platform-specific requirements like executable permissions and file extensions.
-🔄 **Atomic In-Place Updates**: Replaces the running executable without requiring administrative privileges (in most user-writable scenarios) or interrupting user workflow.
-🗑️ **Automatic Cleanup**: Manages temporary update files, ensuring a clean and efficient update process.
-🧩 **Flexible Asset Pattern Matching**: Customizable pattern (`{version}-{os}-{arch}{ext}`) to reliably identify the correct binary asset among multiple release files.
-🔑 **GitHub Token Support**: Optionally use a GitHub Personal Access Token (PAT) for private repositories or to avoid public API rate limits.
-💪 **Resilient Error Handling**: Provides clear error reporting for network issues, file system problems, or invalid configurations.
+- ✨ **Seamless GitHub Releases Integration**: Automatically fetches the latest release information and assets from your public or private GitHub repository.
+- ⚡️ **Semantic Versioning (SemVer) Compliance**: Accurately compares `vX.Y.Z` versions to determine if an update is available, using `golang.org/x/mod/semver`.
+- 🚀 **Cross-Platform Support**: Works flawlessly on Windows, Linux, and macOS, handling platform-specific requirements like executable permissions and file extensions.
+- 🔄 **Atomic In-Place Updates**: Replaces the running executable without requiring administrative privileges (in most user-writable scenarios) or interrupting user workflow.
+- 🗑️ **Automatic Cleanup**: Manages temporary update files, ensuring a clean and efficient update process.
+- 🧩 **Flexible Asset Pattern Matching**: Customizable pattern (`{version}-{os}-{arch}{ext}`) to reliably identify the correct binary asset among multiple release files.
+- 🔑 **GitHub Token Support**: Optionally use a GitHub Personal Access Token (PAT) for private repositories or to avoid public API rate limits.
+- 💪 **Resilient Error Handling**: Provides clear error reporting for network issues, file system problems, or invalid configurations.
 
 ## Installation
 
