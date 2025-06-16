@@ -1,0 +1,343 @@
+{
+  "system": {
+    "name": "github.com/asaidimu/ghupdate",
+    "language": "Go",
+    "description": "A Go library for enabling self-updating capabilities in command-line and desktop applications by integrating with GitHub Releases.",
+    "keyFeatures": [
+      "Automatic self-updating from GitHub",
+      "Cross-platform binary replacement",
+      "Semantic versioning comparison",
+      "Atomic update mechanism",
+      "Support for private repositories with GitHub PATs"
+    ]
+  },
+  "dependencies": {
+    "external": [
+      {
+        "name": "golang.org/x/mod/semver",
+        "purpose": "Used for robust semantic version comparison (vX.Y.Z) to determine if a newer version is available.",
+        "interfaces": [],
+        "installation": "go get golang.org/x/mod/semver",
+        "version": ">=0.0.0"
+      }
+    ],
+    "peer": [
+      {
+        "name": "Go Runtime",
+        "reason": "Required to compile and run `ghupdate` and applications using it.",
+        "version": ">=1.24.4"
+      }
+    ]
+  },
+  "integration": {
+    "environmentRequirements": "Go 1.24.4+ is required for compilation and runtime. Standard operating system environments (Linux, macOS, Windows) are supported. Write permissions are needed for the `DataDir` (temporary update files) and `ExecutablePath` (where the binary is located) to perform updates without elevated privileges. For `ExecutablePath`, this implies the application should be in a user-writable location.",
+    "initializationPatterns": [
+      {
+        "description": "The primary initialization pattern involves calling `HandleUpdateMode()` first in your `main` function, followed by `CleanupUpdate()`, before any other application logic. This ensures correct handling of update-initiated restarts and a clean state.",
+        "codeExample": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"os\"\n\t\"path/filepath\"\n\n\t\"github.com/asaidimu/ghupdate\"\n)\n\nvar Version = \"v1.0.0\" // Injected at build time\n\nfunc main() {\n\t// IMPORTANT: This must be the very first executable line.\n\t// If true, the application was just updated and is now the new version.\n\tif ghupdate.HandleUpdateMode() {\n\t\tfmt.Println(\"Successfully updated! Running new version.\")\n\t}\n\n\t// Determine application data directory (e.g., for temporary update files).\n\tdataDir, err := os.UserCacheDir()\n\tif err != nil {\n\t\tlog.Fatalf(\"Error getting cache dir: %v\", err)\n\t}\n\tappDataDir := filepath.Join(dataDir, \"my-app-name\")\n\tif err := os.MkdirAll(appDataDir, 0755); err != nil {\n\t\tlog.Fatalf(\"Error creating app data dir: %v\", err)\n\t}\n\n\t// Clean up any old temporary update files.\n\tif err := ghupdate.CleanupUpdate(appDataDir); err != nil {\n\t\tlog.Printf(\"Warning: Failed to clean up old update files: %v\\n\", err)\n\t}\n\n\t// Your application's main logic begins here.\n\tfmt.Printf(\"My Application - Version %s running from %s\\n\", Version, os.Args[0])\n\t// ... rest of your application ...\n}"
+      }
+    ],
+    "commonPitfalls": [
+      {
+        "issue": "Not calling `ghupdate.HandleUpdateMode()` as the very first operation in `main()`.",
+        "solution": "This is critical. If `HandleUpdateMode()` is not called first, the newly spawned executable will not perform the file replacement, and the old version will continue running, or the update will fail silently. Always place it at the absolute beginning of your `main` function."
+      },
+      {
+        "issue": "Hardcoding `CurrentVersion` instead of injecting it at build time.",
+        "solution": "Hardcoding makes releases cumbersome and prone to errors. Use Go's `-ldflags` to embed the version (e.g., from `git describe --tags`) directly into the binary during compilation. This ensures the application always knows its true version."
+      },
+      {
+        "issue": "Incorrect `AssetPattern` or inconsistent GitHub release asset naming.",
+        "solution": "`ghupdate` relies on an exact match between the `AssetPattern` and your uploaded GitHub release binary names. Double-check the pattern, including all placeholders (`{version}`, `{os}`, `{arch}`, `{ext}`), against the actual file names on your release page."
+      }
+    ],
+    "lifecycleDependencies": "The `ghupdate` library expects to manage its lifecycle during application startup and during explicit update checks. `HandleUpdateMode()` must run at the very beginning to capture control when an update is being applied. `ApplyUpdate()` causes the current process to exit, transferring control to the newly spawned executable. Therefore, any resources or goroutines started *before* `ApplyUpdate()` is called will be terminated. Cleanup should be done during startup, not shutdown, to ensure temporary files from failed attempts are removed."
+  },
+  "types": {
+    "UpdateConfig": {
+      "id": "type:UpdateConfig",
+      "definition": "type UpdateConfig struct {\n    GitHubOwner    string\n    GitHubRepo     string\n    GitHubToken    string\n    CurrentVersion string\n    DataDir        string\n    ExecutablePath string\n    AssetPattern   string\n    OS             string\n    Arch           string\n}",
+      "purpose": "Holds all necessary configuration parameters for the self-update process, including GitHub repository details, current application version, and file paths for downloads and replacement.",
+      "related": {
+        "methods": [
+          "method:CheckAndPrepareUpdate",
+          "method:ApplyUpdate"
+        ],
+        "patterns": []
+      },
+      "interfaceContract": {
+        "requiredMethods": [],
+        "optionalMethods": [],
+        "parameterObjectStructures": {
+          "GitHubOwner": "string (e.g., \"asaidimu\") - The GitHub username or organization name.",
+          "GitHubRepo": "string (e.g., \"ghupdate\") - The name of the GitHub repository.",
+          "GitHubToken": "string (optional) - A GitHub personal access token for authentication and rate limit bypass.",
+          "CurrentVersion": "string (e.g., \"v1.0.0\") - The semantic version of the running application. Must start with 'v' for `semver` comparison.",
+          "DataDir": "string (absolute path) - A writable directory for temporary update files. `os.UserCacheDir()` is recommended.",
+          "ExecutablePath": "string (absolute path) - The full path to the currently running executable. Use `os.Executable()`.",
+          "AssetPattern": "string (e.g., \"my-app-{version}-{os}-{arch}{ext}\") - Pattern to match release assets. Supports `{version}`, `{os}`, `{arch}`, `{ext}` placeholders.",
+          "OS": "string (optional, e.g., \"linux\", \"windows\", \"darwin\") - Target OS. If empty, `runtime.GOOS` is used.",
+          "Arch": "string (optional, e.g., \"amd64\", \"arm64\") - Target architecture. If empty, `runtime.GOARCH` is used."
+        }
+      }
+    },
+    "UpdateInfo": {
+      "id": "type:UpdateInfo",
+      "definition": "type UpdateInfo struct {\n    CurrentVersion string\n    LatestVersion  string\n    DownloadURL    string\n    AssetName      string\n    ReleaseNotes   string\n}",
+      "purpose": "Contains detailed information about an available update, returned by `CheckAndPrepareUpdate`.",
+      "related": {
+        "methods": [
+          "method:CheckAndPrepareUpdate"
+        ],
+        "patterns": []
+      },
+      "interfaceContract": {
+        "requiredMethods": [],
+        "optionalMethods": [],
+        "parameterObjectStructures": {
+          "CurrentVersion": "string (e.g., \"v1.0.0\") - The version of the currently running application.",
+          "LatestVersion": "string (e.g., \"v1.0.1\") - The semantic version of the latest available release on GitHub.",
+          "DownloadURL": "string (URL) - The direct URL to download the update asset.",
+          "AssetName": "string - The name of the update asset on GitHub (e.g., \"my-app-v1.0.1-linux-amd64\").",
+          "ReleaseNotes": "string - The body/description of the latest GitHub release, often containing changelog information."
+        }
+      }
+    },
+    "GitHubAsset": {
+      "id": "type:GitHubAsset",
+      "definition": "type GitHubAsset struct {\n    Name               string `json:\"name\"`\n    BrowserDownloadURL string `json:\"browser_download_url\"`\n    Size               int64  `json:\"size\"`\n}",
+      "purpose": "Internal struct representing a GitHub release asset, used during API calls.",
+      "related": {
+        "methods": [],
+        "patterns": []
+      },
+      "interfaceContract": {
+        "requiredMethods": [],
+        "optionalMethods": [],
+        "parameterObjectStructures": {
+          "Name": "string - Name of the asset as displayed on GitHub.",
+          "BrowserDownloadURL": "string - URL to download the asset.",
+          "Size": "int64 - Size of the asset in bytes."
+        }
+      }
+    },
+    "GitHubRelease": {
+      "id": "type:GitHubRelease",
+      "definition": "type GitHubRelease struct {\n    TagName    string        `json:\"tag_name\"`\n    Name       string        `json:\"name\"`\n    Body       string        `json:\"body\"`\n    Draft      bool          `json:\"draft\"`\n    Prerelease bool          `json:\"prerelease\"`\n    Assets     []GitHubAsset `json:\"assets\"`\n}",
+      "purpose": "Internal struct representing a GitHub release, used during API calls.",
+      "related": {
+        "methods": [],
+        "patterns": []
+      },
+      "interfaceContract": {
+        "requiredMethods": [],
+        "optionalMethods": [],
+        "parameterObjectStructures": {
+          "TagName": "string - The Git tag associated with the release (e.g., \"v1.0.0\").",
+          "Name": "string - The name of the release.",
+          "Body": "string - The release notes/description.",
+          "Draft": "bool - True if the release is a draft.",
+          "Prerelease": "bool - True if the release is a pre-release.",
+          "Assets": "array of GitHubAsset - List of assets attached to this release."
+        }
+      }
+    }
+  },
+  "methods": {
+    "CheckAndPrepareUpdate": {
+      "id": "method:CheckAndPrepareUpdate",
+      "useCase": "To check for an available update on GitHub and, if found, download the appropriate binary to a temporary location, making it ready for application.",
+      "signature": "func CheckAndPrepareUpdate(config UpdateConfig) (*UpdateInfo, error)",
+      "parameters": "config: (type: UpdateConfig) Configuration settings for the update process, including GitHub repository details, current version, data directory, executable path, and asset pattern.",
+      "prerequisites": "1. A valid `UpdateConfig` must be provided, with all required fields (GitHubOwner, GitHubRepo, CurrentVersion, DataDir, ExecutablePath, AssetPattern) populated. 2. Network connectivity to GitHub API. 3. The `DataDir` must be writable by the application.",
+      "sideEffects": "1. Makes HTTP requests to GitHub API. 2. Downloads a new executable file to the `DataDir` if an update is found. 3. Sets executable permissions (0755) on the downloaded file on Unix-like systems.",
+      "returnValue": "A pointer to an `UpdateInfo` struct if a newer version is found and successfully prepared. `nil` if no update is available. An `error` is returned if any step fails (e.g., invalid config, network issues, no matching asset, download failure).",
+      "exceptions": [
+        "fmt.Errorf(\"invalid config: %w\") - If UpdateConfig fails validation.",
+        "fmt.Errorf(\"failed to fetch latest release: %w\") - If GitHub API call fails or returns non-OK status.",
+        "fmt.Errorf(\"failed to find matching asset: %w\") - If no asset matching `AssetPattern` is found in the latest release.",
+        "fmt.Errorf(\"failed to download update: %w\") - If asset download fails.",
+        "fmt.Errorf(\"failed to make update executable: %w\") - If setting file permissions fails on Unix systems."
+      ],
+      "availability": "sync",
+      "status": "active",
+      "related": {
+        "types": [
+          "type:UpdateConfig",
+          "type:UpdateInfo"
+        ],
+        "patterns": [],
+        "errors": []
+      }
+    },
+    "ApplyUpdate": {
+      "id": "method:ApplyUpdate",
+      "useCase": "To initiate the self-replacement process after a new update binary has been prepared by `CheckAndPrepareUpdate`. This function is intended to be the last call in the current application's lifecycle if an update is to be applied.",
+      "signature": "func ApplyUpdate(config UpdateConfig) error",
+      "parameters": "config: (type: UpdateConfig) The same configuration used for `CheckAndPrepareUpdate`, especially `DataDir` (where the new binary is) and `ExecutablePath` (where the new binary should be copied to).",
+      "prerequisites": "1. `CheckAndPrepareUpdate` must have been successfully called, and the new update executable must exist at `filepath.Join(config.DataDir, \"update\"+getExecutableExtension())`. 2. The operating system must allow spawning new processes.",
+      "sideEffects": "1. Spawns a new child process (the downloaded update executable). 2. Passes arguments to the new process instructing it to perform the file replacement and then continue normal execution. 3. Calls `os.Exit(0)` in the current process, terminating the old application.",
+      "returnValue": "An `error` if the update file is not found or the new process cannot be started. On successful initiation, this function calls `os.Exit(0)` and does not return.",
+      "exceptions": [
+        "fmt.Errorf(\"no prepared update found at %s\") - If the downloaded update file is missing.",
+        "fmt.Errorf(\"failed to start update process: %w\") - If the operating system fails to execute the new binary."
+      ],
+      "availability": "sync",
+      "status": "active",
+      "related": {
+        "types": [
+          "type:UpdateConfig"
+        ],
+        "patterns": [],
+        "errors": []
+      }
+    },
+    "CleanupUpdate": {
+      "id": "method:CleanupUpdate",
+      "useCase": "To remove any leftover temporary update files (e.g., `update.exe` or `update`) from the designated data directory. This should be called at application startup to ensure a clean state.",
+      "signature": "func CleanupUpdate(dataDir string) error",
+      "parameters": "dataDir: (type: string) The absolute path to the directory where temporary update files are stored (same as `UpdateConfig.DataDir`).",
+      "prerequisites": "The `dataDir` must exist and be writable by the application.",
+      "sideEffects": "Deletes the temporary update executable file from the specified directory if it exists.",
+      "returnValue": "Returns `nil` if no update file is found or if cleanup is successful. Returns an `error` if the cleanup operation fails (e.g., permission issues during deletion).",
+      "exceptions": [
+        "fmt.Errorf(\"failed to cleanup update file: %w\") - If `os.Remove` fails due to permissions or other issues."
+      ],
+      "availability": "sync",
+      "status": "active",
+      "related": {
+        "types": [],
+        "patterns": [],
+        "errors": []
+      }
+    },
+    "HandleUpdateMode": {
+      "id": "method:HandleUpdateMode",
+      "useCase": "This critical function must be called as the very first operation in your application's `main` function. It detects if the application was launched by `ApplyUpdate` to perform an in-place update. If so, it takes over, waits for the original process to exit, replaces the old executable with itself, and then allows the application to continue running normally (now as the new version).",
+      "signature": "func HandleUpdateMode() bool",
+      "parameters": "None.",
+      "prerequisites": "This function expects specific command-line arguments (`--perform-update`, `--original-path`, `--pid`) to be passed by the `ApplyUpdate` function.",
+      "sideEffects": "1. May wait for a specified process (the old application) to exit. 2. Copies the currently running executable (the new version) over another file (the original executable path). 3. May call `os.Exit(1)` if critical errors occur during the update handling (e.g., invalid arguments, failure to wait for PID, failure to copy file).",
+      "returnValue": "Returns `true` if the application was in update mode and successfully completed the self-replacement, indicating that the application should continue with its normal flow as the updated version. Returns `false` if the application was not launched in update mode.",
+      "exceptions": [
+        "Calls `os.Exit(1)` directly (without returning error) if there are invalid update mode arguments, failure to wait for the old process, or failure to copy the file. This is because the process is in a critical state to complete the update or fail immediately."
+      ],
+      "availability": "sync",
+      "status": "active",
+      "related": {
+        "types": [],
+        "patterns": [],
+        "errors": []
+      }
+    }
+  },
+  "decisionTrees": {
+    "update_flow_decision": {
+      "id": "decisionTree:update_flow_decision",
+      "question": "Should the application check for and apply an update?",
+      "logic": "IF application_starts_in_update_mode THEN execute_file_replacement ELSE IF CheckAndPrepareUpdate_returns_update THEN apply_update ELSE continue_normal_operation",
+      "validationMethod": "Observe application version after potential update and check `DataDir` for temporary files.",
+      "related": {
+        "methods": [
+          "method:HandleUpdateMode",
+          "method:CheckAndPrepareUpdate",
+          "method:ApplyUpdate",
+          "method:CleanupUpdate"
+        ],
+        "patterns": [
+          "pattern:basic_update_integration"
+        ]
+      }
+    }
+  },
+  "patterns": {
+    "basic_update_integration": {
+      "id": "pattern:basic_update_integration",
+      "description": "The fundamental pattern for integrating `ghupdate` into a Go application, ensuring correct handling of update logic at startup and during regular operation.",
+      "example": {
+        "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"github.com/asaidimu/ghupdate\"\n)\n\nvar Version = \"v1.0.0\" // Injected via ldflags\n\nconst (\n\tgithubOwner  = \"your-owner\"\n\tgithubRepo   = \"your-repo\"\n\tappName      = \"your-app\"\n\tassetPattern = \"{appname}-{version}-{os}-{arch}{ext}\" // Adapt to your naming\n)\n\nfunc main() {\n\t// Phase 1: Handle self-replacement if launched by ApplyUpdate\n\tif ghupdate.HandleUpdateMode() {\n\t\tfmt.Println(\"🎉 Update applied successfully! Resuming.\")\n\t}\n\n\t// Phase 2: Determine data directory and clean up old temp files\n\tdataDir, err := os.UserCacheDir() // Or os.UserConfigDir()\n\tif err != nil {\n\t\tlog.Fatalf(\"Error getting cache dir: %v\", err)\n\t}\n\tappDataDir := filepath.Join(dataDir, appName)\n\tif err := os.MkdirAll(appDataDir, 0755); err != nil {\n\t\tlog.Fatalf(\"Error creating app data dir: %v\", err)\n\t}\n\tif err := ghupdate.CleanupUpdate(appDataDir); err != nil {\n\t\tlog.Printf(\"Warning: Failed to clean up old update files: %v\\n\", err)\n\t}\n\n\t// Phase 3: Your application's core logic\n\tfmt.Printf(\"Running %s version %s\\n\", appName, Version)\n\t// Simulate work\n\t// time.Sleep(2 * time.Second)\n\n\t// Phase 4: Check for and apply updates (e.g., on startup or user command)\n\texecutablePath, err := os.Executable()\n\tif err != nil {\n\t\tlog.Printf(\"Error getting executable path: %v\", err)\n\t\treturn\n\t}\n\n\tconfig := ghupdate.UpdateConfig{\n\t\tGitHubOwner:    githubOwner,\n\t\tGitHubRepo:     githubRepo,\n\t\tGitHubToken:    os.Getenv(\"GITHUB_TOKEN\"), // Optional for public repos\n\t\tCurrentVersion: Version,\n\t\tDataDir:        appDataDir,\n\t\tExecutablePath: executablePath,\n\t\tAssetPattern:   assetPattern,\n\t}\n\n\tupdateInfo, err := ghupdate.CheckAndPrepareUpdate(config)\n\tif err != nil {\n\t\tlog.Printf(\"Error checking for update: %v\\n\", err)\n\t\treturn\n\t}\n\n\tif updateInfo == nil {\n\t\tfmt.Println(\"No update available.\")\n\t\treturn\n\t}\n\n\tfmt.Printf(\"Update available: %s -> %s\\n\", updateInfo.CurrentVersion, updateInfo.LatestVersion)\n\tif err := ghupdate.ApplyUpdate(config); err != nil {\n\t\tlog.Fatalf(\"Error applying update: %v\\n\", err)\n\t}\n\t// The program exits here if ApplyUpdate succeeds.\n}\n",
+        "validation": "The application runs the latest version after the update cycle. No temporary update files remain in `DataDir` after startup. The application restarts automatically to the new version without user intervention."
+      },
+      "related": {
+        "methods": [
+          "method:HandleUpdateMode",
+          "method:CleanupUpdate",
+          "method:CheckAndPrepareUpdate",
+          "method:ApplyUpdate"
+        ],
+        "errors": []
+      }
+    }
+  },
+  "errors": {
+    "UpdateConfigurationError": {
+      "id": "error:UpdateConfigurationError",
+      "type": "error (Go error interface)",
+      "symptoms": "Application exits with a fatal log message, or `CheckAndPrepareUpdate` returns an error with a message like 'invalid config: GitHubOwner is required'.",
+      "properties": "The error object itself might not have specific properties beyond the string message, but the message will indicate which configuration field is missing or invalid.",
+      "scenarios": [
+        {
+          "trigger": "`UpdateConfig.GitHubOwner` is empty.",
+          "example": "```go\nconfig := ghupdate.UpdateConfig{\n    // Missing GitHubOwner\n    GitHubRepo: \"my-repo\",\n    CurrentVersion: \"v1.0.0\",\n    DataDir: \"/tmp/data\",\n    ExecutablePath: \"/path/to/app\",\n    AssetPattern: \"app-{version}-{os}-{arch}{ext}\",\n}\n_, err := ghupdate.CheckAndPrepareUpdate(config)\n// err will contain \"invalid config: GitHubOwner is required\"\n```",
+          "reason": "`validateConfig` function within `ghupdate` checks for mandatory fields and returns an error if any are missing."
+        },
+        {
+          "trigger": "`UpdateConfig.AssetPattern` is empty.",
+          "example": "```go\nconfig := ghupdate.UpdateConfig{\n    GitHubOwner: \"my-owner\",\n    GitHubRepo: \"my-repo\",\n    CurrentVersion: \"v1.0.0\",\n    DataDir: \"/tmp/data\",\n    ExecutablePath: \"/path/to/app\",\n    // Missing AssetPattern\n}\n_, err := ghupdate.CheckAndPrepareUpdate(config)\n// err will contain \"invalid config: AssetPattern is required\"\n```",
+          "reason": "`validateConfig` function requires all essential fields to be present to identify and download assets."
+        }
+      ],
+      "diagnosis": "Check the `UpdateConfig` struct initialization. Ensure all fields marked as 'required' in the documentation for `type:UpdateConfig` are populated with non-empty string values. Inspect the error message for the specific missing field.",
+      "resolution": "Populate all required fields in the `UpdateConfig` struct before passing it to `CheckAndPrepareUpdate`.",
+      "prevention": "Implement robust validation for your application's own configuration inputs that feed into `UpdateConfig`. Use constants for `GitHubOwner`, `GitHubRepo`, `AssetPattern` where possible.",
+      "handlingPatterns": "Catch the error from `CheckAndPrepareUpdate` and log it, providing a user-friendly message about setup issues. The application should continue operating without update functionality, or exit gracefully if updates are mandatory for its operation.",
+      "propagationBehavior": "Errors of this type are typically returned directly by `CheckAndPrepareUpdate` to the caller, allowing the application to handle them. They do not propagate through other `ghupdate` functions."
+    },
+    "GitHubAPIError": {
+      "id": "error:GitHubAPIError",
+      "type": "error (Go error interface)",
+      "symptoms": "`CheckAndPrepareUpdate` returns an error containing messages like 'GitHub API returned status 403', 'failed to fetch latest release', 'failed to download from ... failed with status 404', or 'failed to decode GitHub release JSON'.",
+      "properties": "The error object will typically wrap the underlying network or HTTP error, or directly contain the HTTP status code in its message.",
+      "scenarios": [
+        {
+          "trigger": "GitHub API rate limit exceeded for unauthenticated requests, or incorrect `GitHubToken` for a private repository.",
+          "example": "```go\nconfig := ghupdate.UpdateConfig{ /* ... */ GitHubToken: \"\"} // No token\n// After many requests, CheckAndPrepareUpdate might return:\n// \"GitHub API returned status 403 for https://api.github.com/repos/owner/repo/releases/latest\"\n```",
+          "reason": "GitHub imposes rate limits. Unauthenticated requests are severely limited. Private repositories require authentication."
+        },
+        {
+          "trigger": "The specified `GitHubRepo` or `GitHubOwner` does not exist, or the release asset URL is invalid/missing.",
+          "example": "```go\nconfig := ghupdate.UpdateConfig{GitHubRepo: \"non-existent-repo\"} // Typo\n// CheckAndPrepareUpdate might return:\n// \"GitHub API returned status 404 for https://api.github.com/repos/owner/non-existent-repo/releases/latest\"\n```",
+          "reason": "The HTTP GET request to GitHub's API for releases/latest or asset download returns a 404 Not Found or similar status code, indicating the resource could not be found."
+        }
+      ],
+      "diagnosis": "Verify GitHub owner and repository names in `UpdateConfig`. Ensure the `GitHubToken` (if used) is valid and has appropriate permissions. Check network connectivity. Review GitHub's API status page for outages. For 404 errors during download, ensure the `AssetPattern` correctly matches an existing asset in the latest release.",
+      "resolution": "Provide a valid `GitHubToken` for private repos or to bypass rate limits. Correct any typos in `GitHubOwner` or `GitHubRepo`. Adjust `AssetPattern` if it leads to incorrect asset URLs. Retry after a delay if it's a rate limit issue.",
+      "prevention": "Always use a `GitHubToken` for production deployments. Implement exponential backoff for retries on API errors. Validate `GitHubOwner` and `GitHubRepo` strings at application startup.",
+      "handlingPatterns": "Log these errors but allow the application to continue running without updating. Inform the user that an update check failed. Avoid `log.Fatalf` for these, as they are not necessarily critical to the primary function of the application.",
+      "propagationBehavior": "Returned by `CheckAndPrepareUpdate`. These errors do not directly propagate to `ApplyUpdate` unless `CheckAndPrepareUpdate` succeeds in downloading an invalid file that then causes `ApplyUpdate` to fail (less common)."
+    },
+    "UpdateFileOperationError": {
+      "id": "error:UpdateFileOperationError",
+      "type": "error (Go error interface)",
+      "symptoms": "`CheckAndPrepareUpdate` returns errors like 'failed to make update executable', `ApplyUpdate` returns 'no prepared update found' or 'failed to start update process', `CleanupUpdate` returns 'failed to cleanup update file', or `HandleUpdateMode` exits with a fatal message like 'Failed to replace original executable'.",
+      "properties": "The error object will often wrap an underlying `os.PathError` or `syscall.Errno`, providing details about the specific file operation (open, create, chmod, remove, copy) and the path involved.",
+      "scenarios": [
+        {
+          "trigger": "Application lacks write permissions to `DataDir` or `ExecutablePath`.",
+          "example": "```go\n// Assume appDataDir is a read-only directory\nif err := ghupdate.CleanupUpdate(appDataDir); err != nil {\n    // err will be similar to \"failed to cleanup update file: remove /read/only/dir/update.exe: permission denied\"\n}\n```",
+          "reason": "The operating system prevents the application from performing file system operations (write, delete, change permissions) due to insufficient user privileges in the target directories."
+        },
+        {
+          "trigger": "The `DataDir` specified in `UpdateConfig` does not exist or is inaccessible for writing.",
+          "example": "```go\nconfig := ghupdate.UpdateConfig{DataDir: \"/non/existent/path\"}\n_, err := ghupdate.CheckAndPrepareUpdate(config)\n// err will contain \"failed to download update: failed to create directory for \\\"/non/existent/path/update.exe\\\": mkdir /non/existent/path: no such file or directory\"\n```",
+          "reason": "The application cannot create the necessary directories or files for storing the downloaded update."
+        }
+      ],
+      "diagnosis": "Check file system permissions for the `DataDir` and `ExecutablePath`. Ensure these directories are user-writable. On Windows, check if the executable is running from a protected location (e.g., Program Files) where user accounts typically don't have write access. On Unix, ensure the executable has necessary permissions or is installed in a user's home directory.",
+      "resolution": "Set `DataDir` to a path like `os.UserCacheDir()` or `os.UserConfigDir()`. If the application must reside in a privileged location, consider requiring elevated privileges for the update process, or guide users to install it in their user-specific bin directory. For `HandleUpdateMode` errors, ensure the original application process has truly exited before the new one attempts to copy itself.",
+      "prevention": "Always use `os.UserCacheDir()` or `os.UserConfigDir()` for temporary files. Document installation recommendations for users to place the application in user-writable paths.",
+      "handlingPatterns": "Log these errors as critical, as they prevent the core update functionality. For `ApplyUpdate` and `HandleUpdateMode` failures, consider calling `os.Exit(1)` to indicate a critical failure. For `CleanupUpdate` and `CheckAndPrepareUpdate` download failures, log a warning and continue, but inform the user that automatic updates might not work.",
+      "propagationBehavior": "These errors are generally returned directly by the specific `ghupdate` function (`CheckAndPrepareUpdate`, `ApplyUpdate`, `CleanupUpdate`). `HandleUpdateMode` directly calls `os.Exit(1)` on its failures."
+    }
+  }
+}

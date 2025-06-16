@@ -21,3 +21,7 @@ go.work
 .DS_Store
 *~
 *.log
+dist
+.readme.md
+.commit-message.md
+.commit-message.md
