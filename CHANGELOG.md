@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/asaidimu/ghupdate/compare/v1.0.3...v1.1.0) (2025-06-17)
+
+
+### Features
+
+* **update-lifecycle:** forward original CLI arguments to new process ([09b8a58](https://github.com/asaidimu/ghupdate/commit/09b8a58ed966909c2980558a17d2faf21f0e1aa3))
+
 ## [1.0.3](https://github.com/asaidimu/ghupdate/compare/v1.0.2...v1.0.3) (2025-06-16)
 
 
