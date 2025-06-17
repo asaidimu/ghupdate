@@ -7,4 +7,4 @@ The `ghupdate` library provides a robust and flexible solution for Go applicatio
 This library is built for resilience, managing temporary files, gracefully handling error conditions, and seamlessly integrating into your application's startup flow, offering a truly hands-off update experience for your users.
 
 ---
-*Generated using Gemini AI on 6/16/2025, 3:26:10 PM. Review and refine as needed.*
+*Generated using Gemini AI on 6/16/2025, 8:26:16 PM. Review and refine as needed.*

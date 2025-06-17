@@ -1,6 +1,6 @@
 {
   "system": {
-    "name": "github.com/asaidimu/ghupdate",
+    "name": "ghupdate",
     "language": "Go",
     "description": "A Go library for enabling self-updating capabilities in command-line and desktop applications by integrating with GitHub Releases.",
     "keyFeatures": [

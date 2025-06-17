@@ -2,6 +2,7 @@ package ghupdate
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,6 +48,11 @@ type UpdateConfig struct {
 	OS string
 	// Arch is the target architecture for the update asset. If left empty, runtime.GOARCH will be used.
 	Arch string
+	// ForwardArguments controls whether the original command-line arguments should be preserved
+	// and forwarded to the new process after the update completes. When enabled, the new process
+	// will be started with the same arguments that were passed to the original process.
+	// Default is false for backward compatibility and simpler behavior.
+	ForwardArguments bool
 }
 
 // UpdateInfo contains information about an available update.
@@ -150,8 +156,10 @@ func CheckAndPrepareUpdate(config UpdateConfig) (*UpdateInfo, error) {
 //
 // This function spawns a new process (the downloaded update) with special arguments
 // (--perform-update, --original-path, --pid) that instruct the new process to perform
-// the actual file replacement. After successfully starting the new process,
-// the current application exits, allowing the new process to take over.
+// the actual file replacement. If ForwardArguments is enabled in the config, it also
+// passes the original command-line arguments to be restored after the update.
+// After successfully starting the new process, the current application exits,
+// allowing the new process to take over.
 //
 // Note: If this function succeeds, the current process will call os.Exit(0) and terminate,
 // so the return value will typically not be observed in a successful scenario.
@@ -166,12 +174,29 @@ func ApplyUpdate(config UpdateConfig) error {
 	// Get current process PID
 	currentPID := os.Getpid()
 
+	// Build command arguments
+	args := []string{
+		"--perform-update",
+		"--original-path=" + config.ExecutablePath,
+		"--pid=" + strconv.Itoa(currentPID),
+	}
+
+	// Add original arguments if forwarding is enabled
+	if config.ForwardArguments {
+		originalArgs := filterUpdateArgs(os.Args[1:])
+		if len(originalArgs) > 0 {
+			encodedArgs, err := encodeArgs(originalArgs)
+			if err != nil {
+				return fmt.Errorf("failed to encode original arguments: %w", err)
+			}
+			args = append(args, "--original-args="+encodedArgs)
+		}
+	}
+
 	// Spawn the update process
 	// The new process will run with the --perform-update flag, instructing it
 	// to replace the original executable and then continue as the main application.
-	cmd := exec.Command(updatePath, "--perform-update",
-		"--original-path="+config.ExecutablePath,
-		"--pid="+strconv.Itoa(currentPID))
+	cmd := exec.Command(updatePath, args...)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start update process: %w", err)
@@ -206,7 +231,8 @@ func CleanupUpdate(dataDir string) error {
 // It checks if the application was launched in "update mode" (i.e., with the `--perform-update` argument).
 // If so, it takes over the execution flow, waits for the original process to exit,
 // copies itself (the newly updated executable) to the original application's path,
-// and then allows the application to continue running normally.
+// restores any forwarded original arguments, and then allows the application to continue
+// running normally with those arguments.
 //
 // This mechanism ensures a seamless in-place update without requiring user intervention.
 // If the application is not in update mode, it simply returns `false` and the application
@@ -224,6 +250,7 @@ func HandleUpdateMode() bool {
 	// Parse arguments
 	var originalPath string
 	var pidToWait int
+	var originalArgs []string
 
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "--original-path=") {
@@ -232,6 +259,13 @@ func HandleUpdateMode() bool {
 			pidStr := strings.TrimPrefix(arg, "--pid=")
 			if pid, err := strconv.Atoi(pidStr); err == nil {
 				pidToWait = pid
+			}
+		} else if strings.HasPrefix(arg, "--original-args=") {
+			encodedArgs := strings.TrimPrefix(arg, "--original-args=")
+			if decoded, err := decodeArgs(encodedArgs); err == nil {
+				originalArgs = decoded
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to decode original arguments: %v\n", err)
 			}
 		}
 	}
@@ -261,8 +295,64 @@ func HandleUpdateMode() bool {
 		os.Exit(1)
 	}
 
+	// Restore original arguments if they were forwarded
+	if len(originalArgs) > 0 {
+		// Replace os.Args with the original arguments
+		// Keep os.Args[0] (the executable name) but replace everything else
+		newArgs := make([]string, len(originalArgs)+1)
+		newArgs[0] = os.Args[0]
+		copy(newArgs[1:], originalArgs)
+		os.Args = newArgs
+	}
+
 	// Continue running normally - we are now the updated application
 	return true
+}
+
+// filterUpdateArgs removes update-mode specific arguments from the provided argument slice.
+// This prevents update-mode arguments from being forwarded to the new process.
+func filterUpdateArgs(args []string) []string {
+	var filtered []string
+	
+	for _, arg := range args {
+		// Skip update-mode specific arguments
+		if arg == "--perform-update" ||
+			strings.HasPrefix(arg, "--original-path=") ||
+			strings.HasPrefix(arg, "--pid=") ||
+			strings.HasPrefix(arg, "--original-args=") {
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	
+	return filtered
+}
+
+// encodeArgs encodes a slice of arguments into a base64-encoded JSON string
+// for safe transmission as a command-line argument.
+func encodeArgs(args []string) (string, error) {
+	jsonData, err := json.Marshal(args)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal arguments to JSON: %w", err)
+	}
+	
+	encoded := base64.StdEncoding.EncodeToString(jsonData)
+	return encoded, nil
+}
+
+// decodeArgs decodes a base64-encoded JSON string back into a slice of arguments.
+func decodeArgs(encoded string) ([]string, error) {
+	jsonData, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+	
+	var args []string
+	if err := json.Unmarshal(jsonData, &args); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+	
+	return args, nil
 }
 
 // validateConfig validates the essential fields of the UpdateConfig struct.
