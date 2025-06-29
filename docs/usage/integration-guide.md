@@ -6,8 +6,8 @@ Go 1.24.4+ is required for compilation and runtime. Standard operating system en
 
 ## Initialization Patterns
 
-### The primary initialization pattern involves calling `HandleUpdateMode()` first in your `main` function, followed by `CleanupUpdate()`, before any other application logic. This ensures correct handling of update-initiated restarts and a clean state.
-```[DETECTED_LANGUAGE]
+The primary initialization pattern involves calling `HandleUpdateMode()` first in your `main` function, followed by `CleanupUpdate()`, before any other application logic. This ensures correct handling of update-initiated restarts and a clean state.
+```go
 package main
 
 import (
